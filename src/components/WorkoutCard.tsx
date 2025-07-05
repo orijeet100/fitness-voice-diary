@@ -2,7 +2,7 @@
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Trash2, Clock, Target, Dumbbell, Weight } from 'lucide-react';
+import { Trash2, Dumbbell, Weight } from 'lucide-react';
 import { Workout } from '@/types/workout';
 
 interface WorkoutCardProps {
@@ -11,6 +11,15 @@ interface WorkoutCardProps {
 }
 
 const WorkoutCard: React.FC<WorkoutCardProps> = ({ workout, onDelete }) => {
+  // Group sets by exercise name
+  const groupedExercises = workout.exerciseSets.reduce((acc, set) => {
+    if (!acc[set.exerciseName]) {
+      acc[set.exerciseName] = [];
+    }
+    acc[set.exerciseName].push(set);
+    return acc;
+  }, {} as Record<string, typeof workout.exerciseSets>);
+
   return (
     <Card className="bg-gradient-to-r from-white to-purple-50 border-purple-200 shadow-md hover:shadow-lg transition-all duration-200">
       <CardContent className="p-4">
@@ -26,94 +35,40 @@ const WorkoutCard: React.FC<WorkoutCardProps> = ({ workout, onDelete }) => {
           </Button>
         </div>
         
-        <p className="text-gray-600 mb-3">{workout.description}</p>
-        
-        <div className="flex items-center gap-4 mb-3 text-sm text-gray-500">
-          <div className="flex items-center gap-1">
-            <Clock className="h-4 w-4" />
-            <span>{workout.duration}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Target className="h-4 w-4" />
-            <span>{workout.exercises.length} exercises</span>
-          </div>
-        </div>
-        
-        {/* Muscle Groups */}
-        {workout.muscleGroups && workout.muscleGroups.length > 0 && (
-          <div className="mb-3">
-            <p className="text-sm font-medium text-gray-700 mb-2">Muscle Groups:</p>
-            <div className="flex flex-wrap gap-2">
-              {workout.muscleGroups.map((group, index) => (
-                <span
-                  key={index}
-                  className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium"
-                >
-                  {group}
+        <div className="space-y-4">
+          {Object.entries(groupedExercises).map(([exerciseName, sets]) => (
+            <div key={exerciseName} className="bg-white p-3 rounded-lg border border-purple-100 shadow-sm">
+              <div className="flex items-center gap-2 mb-2">
+                <Dumbbell className="h-4 w-4 text-purple-600" />
+                <span className="font-medium text-gray-800">{exerciseName}</span>
+                <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full ml-auto">
+                  {sets[0].muscleGroup}
                 </span>
-              ))}
-            </div>
-          </div>
-        )}
-        
-        {/* Exercise Details */}
-        {workout.exerciseDetails && workout.exerciseDetails.length > 0 && (
-          <div className="mb-3">
-            <p className="text-sm font-medium text-gray-700 mb-2">Exercise Details:</p>
-            <div className="space-y-2">
-              {workout.exerciseDetails.map((exercise, index) => (
-                <div
-                  key={index}
-                  className="bg-white p-3 rounded-lg border border-purple-100 shadow-sm"
-                >
-                  <div className="flex justify-between items-start mb-1">
-                    <div className="flex items-center gap-2">
-                      <Dumbbell className="h-4 w-4 text-purple-600" />
-                      <span className="font-medium text-gray-800">{exercise.name}</span>
-                    </div>
-                    <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">
-                      {exercise.muscleGroup}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-4 text-sm text-gray-600">
-                    {exercise.sets && exercise.reps && (
-                      <div className="flex items-center gap-1">
-                        <Target className="h-3 w-3" />
-                        <span>{exercise.sets} × {exercise.reps}</span>
-                      </div>
-                    )}
-                    {exercise.weight && (
+              </div>
+              
+              <div className="space-y-1">
+                {sets.map((set, index) => (
+                  <div key={set.id} className="flex items-center justify-between text-sm text-gray-600 bg-gray-50 px-3 py-2 rounded">
+                    <span className="font-medium">Set {index + 1}</span>
+                    <div className="flex items-center gap-4">
                       <div className="flex items-center gap-1">
                         <Weight className="h-3 w-3" />
-                        <span>{exercise.weight}</span>
+                        <span>{set.weight}</span>
                       </div>
-                    )}
+                      <span>{set.reps} reps</span>
+                    </div>
                   </div>
-                  {exercise.notes && (
-                    <p className="text-xs text-gray-500 mt-1 italic">{exercise.notes}</p>
-                  )}
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        )}
+          ))}
+        </div>
         
-        {/* Fallback: Basic exercises list (for backward compatibility) */}
-        {(!workout.exerciseDetails || workout.exerciseDetails.length === 0) && workout.exercises.length > 0 && (
-          <div className="mb-3">
-            <p className="text-sm font-medium text-gray-700 mb-2">Exercises:</p>
-            <div className="flex flex-wrap gap-2">
-              {workout.exercises.map((exercise, index) => (
-                <span
-                  key={index}
-                  className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs"
-                >
-                  {exercise}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
+        <div className="mt-3 pt-3 border-t border-purple-100">
+          <p className="text-sm text-gray-500">
+            {workout.exerciseSets.length} total sets • {Object.keys(groupedExercises).length} exercises
+          </p>
+        </div>
       </CardContent>
     </Card>
   );

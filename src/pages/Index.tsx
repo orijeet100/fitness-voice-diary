@@ -62,6 +62,10 @@ const Index = () => {
     return workouts.filter(workout => new Date(workout.timestamp) >= oneWeekAgo).length;
   };
 
+  const getTotalSets = () => {
+    return workouts.reduce((total, workout) => total + workout.exerciseSets.length, 0);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50">
       {/* Header */}
@@ -71,7 +75,7 @@ const Index = () => {
             <Dumbbell className="h-6 w-6" />
             FitTracker Pro
           </h1>
-          <p className="text-purple-100">Track your workouts with voice</p>
+          <p className="text-purple-100">Track your workout sets with voice</p>
         </div>
       </div>
 
@@ -88,8 +92,8 @@ const Index = () => {
           <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
             <CardContent className="p-4 text-center">
               <Clock className="h-6 w-6 text-blue-600 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-gray-800">{getThisWeekWorkouts()}</p>
-              <p className="text-sm text-gray-600">This Week</p>
+              <p className="text-2xl font-bold text-gray-800">{getTotalSets()}</p>
+              <p className="text-sm text-gray-600">Total Sets</p>
             </CardContent>
           </Card>
         </div>

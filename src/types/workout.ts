@@ -1,22 +1,22 @@
 
-export interface ExerciseDetail {
-  name: string;
+export interface ExerciseSet {
+  id: string;
+  exerciseName: string;
   muscleGroup: string;
-  weight?: string;
-  reps?: number;
-  sets?: number;
-  notes?: string;
+  weight: string;
+  reps: number;
 }
 
 export interface Workout {
   id: string;
   date: string;
   title: string;
-  description: string;
-  duration: string;
-  exercises: string[];
-  muscleGroups: string[];
-  exerciseDetails: ExerciseDetail[];
-  voiceTranscript?: string; // Keep for reference but don't display
+  exerciseSets: ExerciseSet[];
   timestamp: number;
+}
+
+export interface LLMResponse {
+  success: boolean;
+  sets?: ExerciseSet[];
+  error?: string;
 }

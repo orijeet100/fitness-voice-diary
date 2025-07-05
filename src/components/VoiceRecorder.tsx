@@ -3,12 +3,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Mic, MicOff, Square, Play, Save, X, Sparkles } from 'lucide-react';
+import { Mic, MicOff, Square, Play, Save, X, Plus, Trash2, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
-import { Workout, ExerciseDetail } from '@/types/workout';
+import { Workout, ExerciseSet, LLMResponse } from '@/types/workout';
 
 interface VoiceRecorderProps {
   selectedDate: Date;
@@ -20,14 +19,10 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onC
   const [isRecording, setIsRecording] = useState(false);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [duration, setDuration] = useState('');
-  const [exercises, setExercises] = useState('');
-  const [muscleGroups, setMuscleGroups] = useState('');
-  const [exerciseDetails, setExerciseDetails] = useState<ExerciseDetail[]>([]);
-  const [voiceTranscript, setVoiceTranscript] = useState('');
+  const [exerciseSets, setExerciseSets] = useState<ExerciseSet[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
+  const [errorMessage, setErrorMessage] = useState('');
   
   const mediaRecorder = useRef<MediaRecorder | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -40,6 +35,28 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onC
       }
     };
   }, []);
+
+  const createEmptySet = (): ExerciseSet => ({
+    id: crypto.randomUUID(),
+    exerciseName: '',
+    muscleGroup: '',
+    weight: '',
+    reps: 0
+  });
+
+  const addNewSet = () => {
+    setExerciseSets(prev => [...prev, createEmptySet()]);
+  };
+
+  const updateSet = (id: string, field: keyof ExerciseSet, value: string | number) => {
+    setExerciseSets(prev => prev.map(set => 
+      set.id === id ? { ...set, [field]: value } : set
+    ));
+  };
+
+  const deleteSet = (id: string) => {
+    setExerciseSets(prev => prev.filter(set => set.id !== id));
+  };
 
   const startRecording = async () => {
     try {
@@ -60,6 +77,7 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onC
       mediaRecorder.current.start();
       setIsRecording(true);
       setRecordingTime(0);
+      setErrorMessage('');
       
       recordingInterval.current = setInterval(() => {
         setRecordingTime(prev => prev + 1);
@@ -67,7 +85,7 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onC
       
       toast({
         title: "Recording Started",
-        description: "Speak your workout details clearly.",
+        description: "Describe your exercise sets clearly.",
       });
     } catch (error) {
       toast({
@@ -87,65 +105,65 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onC
       }
       toast({
         title: "Recording Stopped",
-        description: "Processing your voice note...",
+        description: "Processing your voice input...",
       });
-      simulateAIProcessing();
+      simulateLLMProcessing();
     }
   };
 
-  const simulateAIProcessing = () => {
+  const simulateLLMProcessing = () => {
     setIsProcessing(true);
+    setErrorMessage('');
+    
     setTimeout(() => {
-      // Mock structured workout data extraction
-      const mockTranscript = "Did a 45-minute upper body strength session. Started with bench press, 3 sets of 8 reps at 185 pounds. Then shoulder press, 3 sets of 10 reps at 65 pounds. Finished with pull-ups, 3 sets of 6 reps bodyweight, and bicep curls, 3 sets of 12 reps at 25 pounds each arm.";
-      
-      const mockExerciseDetails: ExerciseDetail[] = [
-        {
-          name: "Bench Press",
-          muscleGroup: "Chest",
-          weight: "185 lbs",
-          reps: 8,
-          sets: 3
-        },
-        {
-          name: "Shoulder Press",
-          muscleGroup: "Shoulders",
-          weight: "65 lbs",
-          reps: 10,
-          sets: 3
-        },
-        {
-          name: "Pull-ups",
-          muscleGroup: "Back",
-          weight: "Bodyweight",
-          reps: 6,
-          sets: 3
-        },
-        {
-          name: "Bicep Curls",
-          muscleGroup: "Arms",
-          weight: "25 lbs each",
-          reps: 12,
-          sets: 3
-        }
-      ];
+      // Mock LLM response - this would be replaced with actual LLM API call
+      const mockResponse: LLMResponse = Math.random() > 0.2 ? {
+        success: true,
+        sets: [
+          {
+            id: crypto.randomUUID(),
+            exerciseName: "Bench Press",
+            muscleGroup: "Chest",
+            weight: "185 lbs",
+            reps: 8
+          },
+          {
+            id: crypto.randomUUID(),
+            exerciseName: "Bench Press",
+            muscleGroup: "Chest",
+            weight: "185 lbs",
+            reps: 6
+          },
+          {
+            id: crypto.randomUUID(),
+            exerciseName: "Shoulder Press",
+            muscleGroup: "Shoulders",
+            weight: "65 lbs",
+            reps: 10
+          }
+        ]
+      } : {
+        success: false,
+        error: "Could not understand the workout details. Please try again with clearer instructions."
+      };
 
-      const mockMuscleGroups = ["Chest", "Shoulders", "Back", "Arms"];
-      const mockExercises = mockExerciseDetails.map(ex => ex.name);
+      if (mockResponse.success && mockResponse.sets) {
+        setExerciseSets(mockResponse.sets);
+        setTitle("Voice Workout Session");
+        toast({
+          title: "AI Analysis Complete!",
+          description: `Extracted ${mockResponse.sets.length} exercise sets.`,
+        });
+      } else {
+        setErrorMessage(mockResponse.error || "Enter Valid query");
+        toast({
+          title: "Processing Error",
+          description: mockResponse.error || "Enter Valid query",
+          variant: "destructive",
+        });
+      }
       
-      setVoiceTranscript(mockTranscript);
-      setExerciseDetails(mockExerciseDetails);
-      setMuscleGroups(mockMuscleGroups.join(", "));
-      setExercises(mockExercises.join(", "));
-      setTitle("Upper Body Strength Training");
-      setDuration("45 minutes");
-      setDescription("Complete upper body workout focusing on major muscle groups with compound and isolation exercises.");
       setIsProcessing(false);
-      
-      toast({
-        title: "AI Analysis Complete!",
-        description: "Your workout details have been extracted and organized.",
-      });
     }, 2000);
   };
 
@@ -167,15 +185,32 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onC
       return;
     }
 
+    if (exerciseSets.length === 0) {
+      toast({
+        title: "No Exercise Sets",
+        description: "Please add at least one exercise set.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const validSets = exerciseSets.filter(set => 
+      set.exerciseName.trim() && set.muscleGroup.trim() && set.weight.trim() && set.reps > 0
+    );
+
+    if (validSets.length === 0) {
+      toast({
+        title: "Invalid Sets",
+        description: "Please fill in all required fields for at least one set.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const workout = {
       date: format(selectedDate, 'yyyy-MM-dd'),
       title: title.trim(),
-      description: description.trim(),
-      duration: duration.trim() || "Not specified",
-      exercises: exercises.split(',').map(ex => ex.trim()).filter(ex => ex.length > 0),
-      muscleGroups: muscleGroups.split(',').map(mg => mg.trim()).filter(mg => mg.length > 0),
-      exerciseDetails: exerciseDetails,
-      voiceTranscript: voiceTranscript.trim(),
+      exerciseSets: validSets,
     };
 
     onSave(workout);
@@ -187,9 +222,16 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onC
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Initialize with one empty set if none exist
+  useEffect(() => {
+    if (exerciseSets.length === 0) {
+      addNewSet();
+    }
+  }, []);
+
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md max-h-[90vh] overflow-y-auto bg-white shadow-2xl">
+      <Card className="w-full max-w-lg max-h-[90vh] overflow-y-auto bg-white shadow-2xl">
         <CardHeader className="bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-t-lg">
           <div className="flex justify-between items-center">
             <CardTitle className="text-lg">Add Workout</CardTitle>
@@ -207,7 +249,7 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onC
           </p>
         </CardHeader>
         
-        <CardContent className="p-6 space-y-4">
+        <CardContent className="p-6 space-y-6">
           {/* Voice Recording Section */}
           <div className="text-center space-y-4">
             <div className="flex justify-center">
@@ -258,88 +300,103 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onC
                 </Button>
               </div>
             )}
+
+            {errorMessage && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                <p className="text-red-600 text-sm">{errorMessage}</p>
+              </div>
+            )}
           </div>
 
-          {/* Extracted Exercise Details */}
-          {exerciseDetails.length > 0 && (
-            <div className="bg-green-50 p-4 rounded-lg border-l-4 border-green-400">
-              <h4 className="font-semibold text-green-800 mb-3">Extracted Workout Details:</h4>
-              <div className="space-y-2">
-                {exerciseDetails.map((exercise, index) => (
-                  <div key={index} className="bg-white p-3 rounded border border-green-200">
-                    <div className="flex justify-between items-start mb-1">
-                      <span className="font-medium text-gray-800">{exercise.name}</span>
-                      <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
-                        {exercise.muscleGroup}
-                      </span>
+          {/* Title Input */}
+          <div>
+            <Label htmlFor="title">Workout Title *</Label>
+            <Input
+              id="title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g., Upper Body Session"
+              className="mt-1"
+            />
+          </div>
+
+          {/* Exercise Sets */}
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <Label className="text-base font-semibold">Exercise Sets</Label>
+              <Button
+                onClick={addNewSet}
+                size="sm"
+                className="bg-green-600 hover:bg-green-700"
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Add Set
+              </Button>
+            </div>
+
+            {exerciseSets.map((set, index) => (
+              <Card key={set.id} className="p-4 bg-gray-50 border-l-4 border-purple-400">
+                <div className="flex justify-between items-start mb-3">
+                  <h4 className="font-medium text-gray-800">Set {index + 1}</h4>
+                  {exerciseSets.length > 1 && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => deleteSet(set.id)}
+                      className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+                
+                <div className="grid grid-cols-1 gap-3">
+                  <div>
+                    <Label htmlFor={`exercise-${set.id}`}>Exercise Name *</Label>
+                    <Input
+                      id={`exercise-${set.id}`}
+                      value={set.exerciseName}
+                      onChange={(e) => updateSet(set.id, 'exerciseName', e.target.value)}
+                      placeholder="e.g., Bench Press"
+                    />
+                  </div>
+                  
+                  <div>
+                    <Label htmlFor={`muscle-${set.id}`}>Muscle Group *</Label>
+                    <Input
+                      id={`muscle-${set.id}`}
+                      value={set.muscleGroup}
+                      onChange={(e) => updateSet(set.id, 'muscleGroup', e.target.value)}
+                      placeholder="e.g., Chest"
+                    />
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label htmlFor={`weight-${set.id}`}>Weight *</Label>
+                      <Input
+                        id={`weight-${set.id}`}
+                        value={set.weight}
+                        onChange={(e) => updateSet(set.id, 'weight', e.target.value)}
+                        placeholder="e.g., 185 lbs"
+                      />
                     </div>
-                    <div className="text-sm text-gray-600">
-                      {exercise.sets && <span>{exercise.sets} sets × </span>}
-                      {exercise.reps && <span>{exercise.reps} reps</span>}
-                      {exercise.weight && <span className="ml-2">@ {exercise.weight}</span>}
+                    
+                    <div>
+                      <Label htmlFor={`reps-${set.id}`}>Reps *</Label>
+                      <Input
+                        id={`reps-${set.id}`}
+                        type="number"
+                        value={set.reps || ''}
+                        onChange={(e) => updateSet(set.id, 'reps', parseInt(e.target.value) || 0)}
+                        placeholder="8"
+                        min="0"
+                      />
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Manual Input Fields */}
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="title">Workout Title *</Label>
-              <Input
-                id="title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g., Upper Body Strength, Cardio Session"
-                className="mt-1"
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="muscleGroups">Muscle Groups</Label>
-              <Input
-                id="muscleGroups"
-                value={muscleGroups}
-                onChange={(e) => setMuscleGroups(e.target.value)}
-                placeholder="e.g., Chest, Back, Shoulders"
-                className="mt-1"
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Brief workout summary..."
-                className="mt-1 min-h-[60px]"
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="duration">Duration</Label>
-              <Input
-                id="duration"
-                value={duration}
-                onChange={(e) => setDuration(e.target.value)}
-                placeholder="e.g., 45 minutes, 1 hour"
-                className="mt-1"
-              />
-            </div>
-            
-            <div>
-              <Label htmlFor="exercises">Exercises (comma-separated)</Label>
-              <Input
-                id="exercises"
-                value={exercises}
-                onChange={(e) => setExercises(e.target.value)}
-                placeholder="e.g., Bench Press, Squats, Deadlifts"
-                className="mt-1"
-              />
-            </div>
+                </div>
+              </Card>
+            ))}
           </div>
 
           {/* Save Button */}
