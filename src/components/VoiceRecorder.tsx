@@ -2,12 +2,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Mic, MicOff, Square, Play, Save, X, Plus, Trash2, Sparkles } from 'lucide-react';
+import { X, Save } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
 import { Workout, ExerciseSet, LLMResponse } from '@/types/workout';
+import VoiceRecordingControls from './VoiceRecordingControls';
+import ExerciseSetForm from './ExerciseSetForm';
 
 interface VoiceRecorderProps {
   selectedDate: Date;
@@ -17,21 +17,28 @@ interface VoiceRecorderProps {
 
 const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onClose }) => {
   const [isRecording, setIsRecording] = useState(false);
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
-  const [title, setTitle] = useState('');
   const [exerciseSets, setExerciseSets] = useState<ExerciseSet[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [errorMessage, setErrorMessage] = useState('');
   
   const mediaRecorder = useRef<MediaRecorder | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const recordingInterval = useRef<NodeJS.Timeout | null>(null);
+  const silenceTimeout = useRef<NodeJS.Timeout | null>(null);
+  const audioContext = useRef<AudioContext | null>(null);
+  const analyser = useRef<AnalyserNode | null>(null);
+  const microphone = useRef<MediaStreamAudioSourceNode | null>(null);
 
   useEffect(() => {
     return () => {
       if (recordingInterval.current) {
         clearInterval(recordingInterval.current);
+      }
+      if (silenceTimeout.current) {
+        clearTimeout(silenceTimeout.current);
+      }
+      if (audioContext.current) {
+        audioContext.current.close();
       }
     };
   }, []);
@@ -58,6 +65,48 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onC
     setExerciseSets(prev => prev.filter(set => set.id !== id));
   };
 
+  const detectSilence = (stream: MediaStream) => {
+    audioContext.current = new AudioContext();
+    analyser.current = audioContext.current.createAnalyser();
+    microphone.current = audioContext.current.createMediaStreamSource(stream);
+    
+    microphone.current.connect(analyser.current);
+    analyser.current.fftSize = 512;
+    
+    const bufferLength = analyser.current.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    
+    const checkAudioLevel = () => {
+      analyser.current!.getByteFrequencyData(dataArray);
+      const average = dataArray.reduce((sum, value) => sum + value, 0) / bufferLength;
+      
+      if (average < 20) { // Very low audio level threshold
+        if (!silenceTimeout.current) {
+          silenceTimeout.current = setTimeout(() => {
+            if (isRecording) {
+              stopRecording();
+              toast({
+                title: "Recording Stopped",
+                description: "No voice detected for 4 seconds.",
+              });
+            }
+          }, 4000); // 4 seconds of silence
+        }
+      } else {
+        if (silenceTimeout.current) {
+          clearTimeout(silenceTimeout.current);
+          silenceTimeout.current = null;
+        }
+      }
+      
+      if (isRecording) {
+        requestAnimationFrame(checkAudioLevel);
+      }
+    };
+    
+    checkAudioLevel();
+  };
+
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -69,9 +118,10 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onC
       };
       
       mediaRecorder.current.onstop = () => {
-        const blob = new Blob(chunks, { type: 'audio/wav' });
-        setAudioBlob(blob);
         stream.getTracks().forEach(track => track.stop());
+        if (audioContext.current) {
+          audioContext.current.close();
+        }
       };
       
       mediaRecorder.current.start();
@@ -79,13 +129,16 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onC
       setRecordingTime(0);
       setErrorMessage('');
       
+      // Start silence detection
+      detectSilence(stream);
+      
       recordingInterval.current = setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
       
       toast({
         title: "Recording Started",
-        description: "Describe your exercise sets clearly.",
+        description: "Voice will auto-stop after 4 seconds of silence.",
       });
     } catch (error) {
       toast({
@@ -103,6 +156,10 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onC
       if (recordingInterval.current) {
         clearInterval(recordingInterval.current);
       }
+      if (silenceTimeout.current) {
+        clearTimeout(silenceTimeout.current);
+        silenceTimeout.current = null;
+      }
       toast({
         title: "Recording Stopped",
         description: "Processing your voice input...",
@@ -116,7 +173,6 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onC
     setErrorMessage('');
     
     setTimeout(() => {
-      // Mock LLM response - this would be replaced with actual LLM API call
       const mockResponse: LLMResponse = Math.random() > 0.2 ? {
         success: true,
         sets: [
@@ -149,7 +205,6 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onC
 
       if (mockResponse.success && mockResponse.sets) {
         setExerciseSets(mockResponse.sets);
-        setTitle("Voice Workout Session");
         toast({
           title: "AI Analysis Complete!",
           description: `Extracted ${mockResponse.sets.length} exercise sets.`,
@@ -167,24 +222,7 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onC
     }, 2000);
   };
 
-  const playAudio = () => {
-    if (audioBlob && audioRef.current) {
-      const audioUrl = URL.createObjectURL(audioBlob);
-      audioRef.current.src = audioUrl;
-      audioRef.current.play();
-    }
-  };
-
   const handleSave = () => {
-    if (!title.trim()) {
-      toast({
-        title: "Missing Information",
-        description: "Please provide a workout title.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     if (exerciseSets.length === 0) {
       toast({
         title: "No Exercise Sets",
@@ -209,17 +247,11 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onC
 
     const workout = {
       date: format(selectedDate, 'yyyy-MM-dd'),
-      title: title.trim(),
+      title: `Workout - ${format(selectedDate, 'MMM dd')}`,
       exerciseSets: validSets,
     };
 
     onSave(workout);
-  };
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   // Initialize with one empty set if none exist
@@ -250,156 +282,22 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onC
         </CardHeader>
         
         <CardContent className="p-6 space-y-6">
-          {/* Voice Recording Section */}
-          <div className="text-center space-y-4">
-            <div className="flex justify-center">
-              <div className={`p-4 rounded-full ${isRecording ? 'bg-red-100 animate-pulse' : 'bg-purple-100'}`}>
-                {!isRecording ? (
-                  <Button
-                    onClick={startRecording}
-                    className="bg-purple-600 hover:bg-purple-700 rounded-full p-4 shadow-lg"
-                    disabled={isProcessing}
-                  >
-                    <Mic className="h-6 w-6 text-white" />
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={stopRecording}
-                    className="bg-red-600 hover:bg-red-700 rounded-full p-4 shadow-lg"
-                  >
-                    <Square className="h-6 w-6 text-white" />
-                  </Button>
-                )}
-              </div>
-            </div>
-            
-            {isRecording && (
-              <div className="text-center">
-                <p className="text-red-600 font-semibold">Recording: {formatTime(recordingTime)}</p>
-                <p className="text-sm text-gray-500">Describe your exercises, weights, and reps</p>
-              </div>
-            )}
-            
-            {isProcessing && (
-              <div className="flex items-center justify-center gap-2 text-purple-600">
-                <Sparkles className="h-5 w-5 animate-spin" />
-                <span>AI is analyzing your workout...</span>
-              </div>
-            )}
-            
-            {audioBlob && !isProcessing && (
-              <div className="flex justify-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={playAudio}
-                  className="flex items-center gap-2"
-                >
-                  <Play className="h-4 w-4" />
-                  Play Recording
-                </Button>
-              </div>
-            )}
+          <VoiceRecordingControls
+            isRecording={isRecording}
+            isProcessing={isProcessing}
+            recordingTime={recordingTime}
+            onStartRecording={startRecording}
+            onStopRecording={stopRecording}
+            errorMessage={errorMessage}
+          />
 
-            {errorMessage && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-                <p className="text-red-600 text-sm">{errorMessage}</p>
-              </div>
-            )}
-          </div>
+          <ExerciseSetForm
+            exerciseSets={exerciseSets}
+            onUpdateSet={updateSet}
+            onDeleteSet={deleteSet}
+            onAddNewSet={addNewSet}
+          />
 
-          {/* Title Input */}
-          <div>
-            <Label htmlFor="title">Workout Title *</Label>
-            <Input
-              id="title"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="e.g., Upper Body Session"
-              className="mt-1"
-            />
-          </div>
-
-          {/* Exercise Sets */}
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <Label className="text-base font-semibold">Exercise Sets</Label>
-              <Button
-                onClick={addNewSet}
-                size="sm"
-                className="bg-green-600 hover:bg-green-700"
-              >
-                <Plus className="h-4 w-4 mr-1" />
-                Add Set
-              </Button>
-            </div>
-
-            {exerciseSets.map((set, index) => (
-              <Card key={set.id} className="p-4 bg-gray-50 border-l-4 border-purple-400">
-                <div className="flex justify-between items-start mb-3">
-                  <h4 className="font-medium text-gray-800">Set {index + 1}</h4>
-                  {exerciseSets.length > 1 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => deleteSet(set.id)}
-                      className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  )}
-                </div>
-                
-                <div className="grid grid-cols-1 gap-3">
-                  <div>
-                    <Label htmlFor={`exercise-${set.id}`}>Exercise Name *</Label>
-                    <Input
-                      id={`exercise-${set.id}`}
-                      value={set.exerciseName}
-                      onChange={(e) => updateSet(set.id, 'exerciseName', e.target.value)}
-                      placeholder="e.g., Bench Press"
-                    />
-                  </div>
-                  
-                  <div>
-                    <Label htmlFor={`muscle-${set.id}`}>Muscle Group *</Label>
-                    <Input
-                      id={`muscle-${set.id}`}
-                      value={set.muscleGroup}
-                      onChange={(e) => updateSet(set.id, 'muscleGroup', e.target.value)}
-                      placeholder="e.g., Chest"
-                    />
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label htmlFor={`weight-${set.id}`}>Weight *</Label>
-                      <Input
-                        id={`weight-${set.id}`}
-                        value={set.weight}
-                        onChange={(e) => updateSet(set.id, 'weight', e.target.value)}
-                        placeholder="e.g., 185 lbs"
-                      />
-                    </div>
-                    
-                    <div>
-                      <Label htmlFor={`reps-${set.id}`}>Reps *</Label>
-                      <Input
-                        id={`reps-${set.id}`}
-                        type="number"
-                        value={set.reps || ''}
-                        onChange={(e) => updateSet(set.id, 'reps', parseInt(e.target.value) || 0)}
-                        placeholder="8"
-                        min="0"
-                      />
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-
-          {/* Save Button */}
           <div className="flex gap-3 pt-4">
             <Button
               variant="outline"
@@ -419,8 +317,6 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onC
           </div>
         </CardContent>
       </Card>
-      
-      <audio ref={audioRef} className="hidden" />
     </div>
   );
 };
