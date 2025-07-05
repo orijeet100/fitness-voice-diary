@@ -8,17 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Mic, MicOff, Square, Play, Save, X, Sparkles } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from '@/hooks/use-toast';
-
-interface Workout {
-  id: string;
-  date: string;
-  title: string;
-  description: string;
-  duration: string;
-  exercises: string[];
-  voiceTranscript?: string;
-  timestamp: number;
-}
+import { Workout, ExerciseDetail } from '@/types/workout';
 
 interface VoiceRecorderProps {
   selectedDate: Date;
@@ -33,6 +23,8 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onC
   const [description, setDescription] = useState('');
   const [duration, setDuration] = useState('');
   const [exercises, setExercises] = useState('');
+  const [muscleGroups, setMuscleGroups] = useState('');
+  const [exerciseDetails, setExerciseDetails] = useState<ExerciseDetail[]>([]);
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -97,28 +89,62 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onC
         title: "Recording Stopped",
         description: "Processing your voice note...",
       });
-      // Simulate AI processing of voice data
       simulateAIProcessing();
     }
   };
 
   const simulateAIProcessing = () => {
     setIsProcessing(true);
-    // Simulate AI processing delay
     setTimeout(() => {
-      const mockTranscript = "Did a 45-minute strength training session focusing on upper body. Completed bench press, shoulder press, and pull-ups. Great intensity today!";
-      const mockExercises = ["Bench Press", "Shoulder Press", "Pull-ups", "Bicep Curls"];
+      // Mock structured workout data extraction
+      const mockTranscript = "Did a 45-minute upper body strength session. Started with bench press, 3 sets of 8 reps at 185 pounds. Then shoulder press, 3 sets of 10 reps at 65 pounds. Finished with pull-ups, 3 sets of 6 reps bodyweight, and bicep curls, 3 sets of 12 reps at 25 pounds each arm.";
+      
+      const mockExerciseDetails: ExerciseDetail[] = [
+        {
+          name: "Bench Press",
+          muscleGroup: "Chest",
+          weight: "185 lbs",
+          reps: 8,
+          sets: 3
+        },
+        {
+          name: "Shoulder Press",
+          muscleGroup: "Shoulders",
+          weight: "65 lbs",
+          reps: 10,
+          sets: 3
+        },
+        {
+          name: "Pull-ups",
+          muscleGroup: "Back",
+          weight: "Bodyweight",
+          reps: 6,
+          sets: 3
+        },
+        {
+          name: "Bicep Curls",
+          muscleGroup: "Arms",
+          weight: "25 lbs each",
+          reps: 12,
+          sets: 3
+        }
+      ];
+
+      const mockMuscleGroups = ["Chest", "Shoulders", "Back", "Arms"];
+      const mockExercises = mockExerciseDetails.map(ex => ex.name);
       
       setVoiceTranscript(mockTranscript);
-      setDescription(mockTranscript);
+      setExerciseDetails(mockExerciseDetails);
+      setMuscleGroups(mockMuscleGroups.join(", "));
+      setExercises(mockExercises.join(", "));
       setTitle("Upper Body Strength Training");
       setDuration("45 minutes");
-      setExercises(mockExercises.join(", "));
+      setDescription("Complete upper body workout focusing on major muscle groups with compound and isolation exercises.");
       setIsProcessing(false);
       
       toast({
         title: "AI Analysis Complete!",
-        description: "Your workout details have been extracted.",
+        description: "Your workout details have been extracted and organized.",
       });
     }, 2000);
   };
@@ -147,6 +173,8 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onC
       description: description.trim(),
       duration: duration.trim() || "Not specified",
       exercises: exercises.split(',').map(ex => ex.trim()).filter(ex => ex.length > 0),
+      muscleGroups: muscleGroups.split(',').map(mg => mg.trim()).filter(mg => mg.length > 0),
+      exerciseDetails: exerciseDetails,
       voiceTranscript: voiceTranscript.trim(),
     };
 
@@ -206,7 +234,7 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onC
             {isRecording && (
               <div className="text-center">
                 <p className="text-red-600 font-semibold">Recording: {formatTime(recordingTime)}</p>
-                <p className="text-sm text-gray-500">Tap the square to stop</p>
+                <p className="text-sm text-gray-500">Describe your exercises, weights, and reps</p>
               </div>
             )}
             
@@ -232,6 +260,30 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onC
             )}
           </div>
 
+          {/* Extracted Exercise Details */}
+          {exerciseDetails.length > 0 && (
+            <div className="bg-green-50 p-4 rounded-lg border-l-4 border-green-400">
+              <h4 className="font-semibold text-green-800 mb-3">Extracted Workout Details:</h4>
+              <div className="space-y-2">
+                {exerciseDetails.map((exercise, index) => (
+                  <div key={index} className="bg-white p-3 rounded border border-green-200">
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="font-medium text-gray-800">{exercise.name}</span>
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                        {exercise.muscleGroup}
+                      </span>
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      {exercise.sets && <span>{exercise.sets} sets × </span>}
+                      {exercise.reps && <span>{exercise.reps} reps</span>}
+                      {exercise.weight && <span className="ml-2">@ {exercise.weight}</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Manual Input Fields */}
           <div className="space-y-4">
             <div>
@@ -240,7 +292,18 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onC
                 id="title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g., Morning Run, Chest Day"
+                placeholder="e.g., Upper Body Strength, Cardio Session"
+                className="mt-1"
+              />
+            </div>
+            
+            <div>
+              <Label htmlFor="muscleGroups">Muscle Groups</Label>
+              <Input
+                id="muscleGroups"
+                value={muscleGroups}
+                onChange={(e) => setMuscleGroups(e.target.value)}
+                placeholder="e.g., Chest, Back, Shoulders"
                 className="mt-1"
               />
             </div>
@@ -251,8 +314,8 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onC
                 id="description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Describe your workout..."
-                className="mt-1 min-h-[80px]"
+                placeholder="Brief workout summary..."
+                className="mt-1 min-h-[60px]"
               />
             </div>
             
@@ -262,7 +325,7 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onC
                 id="duration"
                 value={duration}
                 onChange={(e) => setDuration(e.target.value)}
-                placeholder="e.g., 30 minutes, 1 hour"
+                placeholder="e.g., 45 minutes, 1 hour"
                 className="mt-1"
               />
             </div>
@@ -273,7 +336,7 @@ const VoiceRecorder: React.FC<VoiceRecorderProps> = ({ selectedDate, onSave, onC
                 id="exercises"
                 value={exercises}
                 onChange={(e) => setExercises(e.target.value)}
-                placeholder="e.g., Push-ups, Squats, Bench Press"
+                placeholder="e.g., Bench Press, Squats, Deadlifts"
                 className="mt-1"
               />
             </div>

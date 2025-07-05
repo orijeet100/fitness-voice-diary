@@ -3,29 +3,18 @@ import React, { useState, useEffect } from 'react';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Mic, MicOff, Plus, Calendar as CalendarIcon, Dumbbell, Clock, Target } from 'lucide-react';
+import { Plus, Calendar as CalendarIcon, Dumbbell, Clock, Target } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { toast } from '@/hooks/use-toast';
 import WorkoutCard from '@/components/WorkoutCard';
 import VoiceRecorder from '@/components/VoiceRecorder';
-
-interface Workout {
-  id: string;
-  date: string;
-  title: string;
-  description: string;
-  duration: string;
-  exercises: string[];
-  voiceTranscript?: string;
-  timestamp: number;
-}
+import { Workout } from '@/types/workout';
 
 const Index = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [workouts, setWorkouts] = useState<Workout[]>([]);
-  const [isRecording, setIsRecording] = useState(false);
   const [showAddWorkout, setShowAddWorkout] = useState(false);
 
   // Load workouts from localStorage on component mount
